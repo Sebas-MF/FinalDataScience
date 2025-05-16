@@ -1,0 +1,81 @@
+
+
+# Proyecto de Predicción de LTV - Digital Wallet
+
+Este proyecto tiene como objetivo construir un modelo de clasificación capaz de predecir si un cliente de una billetera digital tendrá un Lifetime Value (LTV) alto o bajo, utilizando técnicas de ciencia de datos, transformación de variables, y análisis estadístico.
+
+---
+
+## 1. Estructura del Proyecto
+
+```
+📁 /
+├── eda.ipynb                 # Análisis exploratorio de datos y transformación inicial
+├── model/
+│   ├── modelo_logistica.ipynb  # Modelado, iteraciones y métricas finales
+│   └── otros_archivos         # (si aplica)
+├── README                     # Este archivo
+```
+
+---
+
+## 2. Contenido del Proyecto
+
+### 🔍 Análisis Exploratorio (EDA)
+
+- Carga del dataset original
+- Análisis de duplicados, tipos de datos, valores nulos
+- Formulación y resolución de 3 preguntas complejas
+- Visualizaciones gráficas (heatmap, boxplots, etc.)
+- Conversión de LTV a variable binaria (alto vs bajo)
+
+### 🧠 Modelado
+
+- Modelo base: regresión logística con todas las variables iniciales
+- Transformación de variables categóricas usando WoE
+- Eliminación de outliers por 3σ
+- Feature Engineering: interacciones polinómicas, logaritmo del target
+- Feature Selection:
+  - Heatmap de correlación
+  - Importancia por coeficientes
+  - WoE + IV
+
+### 🧪 Iteraciones
+
+- Iteración 1: baseline sin transformación
+- Iteración 2: con WoE y estandarización
+- Iteración 3: con eliminación de outliers
+- Iteración 4 (opcional): logaritmo del target
+
+### ✅ Modelo Final
+
+- Regresión logística escalada
+- Evaluado con: matriz de confusión, Accuracy, ROC AUC, KS
+- Curva ROC generada y analizada
+
+---
+
+## 3. Requisitos Técnicos
+
+- Python 3.10+
+- Jupyter Notebooks
+- Bibliotecas principales:
+  - pandas, numpy, matplotlib, seaborn
+  - scikit-learn
+  - imblearn (para SMOTE, si se aplica)
+
+---
+
+## 4. Cómo Ejecutar
+
+1. Abrir el archivo `eda.ipynb` y ejecutar todas las celdas (`Run all`)
+2. Navegar a la carpeta `model/` y abrir `modelo_logistica.ipynb`
+3. Ejecutar el notebook para ver el entrenamiento, iteraciones y métricas finales
+
+---
+
+## 5. Autores
+
+- Sebastián Mollinedo
+  Universidad Francisco Marroquín
+  Curso de Ciencia de Datos - Primer semestre 2025

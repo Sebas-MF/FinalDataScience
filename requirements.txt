@@ -1,8 +1,6 @@
 pandas
 numpy
-scikit-learn
 matplotlib
 seaborn
-streamlit
-reportlab
-python-pptx
+scikit-learn
+imbalanced-learn
