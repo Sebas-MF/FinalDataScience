@@ -1,108 +1,88 @@
 import streamlit as st
-import pandas as pd
-import joblib
-import os
 import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
 
-ruta_modelo = "notebooks/outputs/modelos_guardados/logreg_ltv_opt.pkl"
+@st.cache_resource
+def load_model():
+    import pickle
+    with open('model_rf.pkl', 'rb') as f:
+        model = pickle.load(f)
+    return model
 
-try:
-    modelo = joblib.load(ruta_modelo)
-except FileNotFoundError:
-    st.error(f"No se encontró el archivo del modelo en: {ruta_modelo}")
-    st.stop()
+@st.cache_data
+def load_importances():
+    # Asume que el modelo RF regressor tiene feature_importances_
+    import pickle
+    model = load_model()
+    import pandas as pd
+    # Nombres de columnas en el mismo orden que X_reg_train
+    feature_names = model.feature_names_in_
+    importances = pd.Series(model.feature_importances_, index=feature_names).sort_values(ascending=False)
+    return importances
+importances = load_importances()
 
-# Título del dashboard
-st.title("Predicción del Nivel de LTV de Clientes Fintech")
+model = load_model()
 
-st.markdown("""
-Este modelo predice si un cliente tiene un nivel de LTV **bajo**, **medio** o **alto** 
-en función de sus características transaccionales clave.
-""")
+st.title("Predicción de LTV de billetera digital")
 
-# Inputs del usuario
-total_spent = st.number_input("Total Spent", min_value=0.0)
-avg_trans = st.number_input("Avg Transaction Value", min_value=0.0)
-total_trans = st.number_input("Total Transactions", min_value=0)
-max_trans = st.number_input("Max Transaction Value", min_value=0.0)
-min_trans = st.number_input("Min Transaction Value", min_value=0.0)
+st.header("Ingrese datos del cliente para la predicción")
+age = st.number_input('Edad del cliente', min_value=18, max_value=100, value=30)
+income_level = st.selectbox('Nivel de ingreso', ['Bajo', 'Medio', 'Alto'])
+usage_freq = st.selectbox('Frecuencia de uso de la app', ['Diario', 'Semanal', 'Mensual'])
+preferred_method = st.selectbox('Método de pago preferido', ['Tarjeta', 'Billetera', 'Transferencia'])
 
-# Botón para predecir
+show_advanced = st.checkbox('Ingresar detalles avanzados (opcional)')
+if show_advanced:
+    total_tx = st.number_input('¿Cuántas compras has hecho en total?', min_value=0, value=0)
+    avg_tx_value = st.number_input('¿Cuánto gastas en promedio por compra? (Q)', min_value=0.0, value=0.0)
+    max_tx_value = st.number_input('¿Cuál fue tu compra más cara? (Q)', min_value=0.0, value=0.0)
+    min_tx_value = st.number_input('¿Cuál fue tu compra más barata? (Q)', min_value=0.0, value=0.0)
+    active_days = st.number_input('¿Cuántos días llevas usando la app?', min_value=0, value=0)
+    days_since_last = st.number_input('¿Hace cuántos días fue tu última compra?', min_value=0, value=0)
+    issue_time = st.number_input('Tiempo de resolución de incidencias (horas)', min_value=0.0, value=0.0)
+
 if st.button("Predecir LTV"):
-    # Crear un DataFrame con los valores ingresados
-    X_nuevo = pd.DataFrame([[total_spent, avg_trans, total_trans, max_trans, min_trans]],
-                           columns=['Total_Spent', 'Avg_Transaction_Value', 'Total_Transactions',
-                                    'Max_Transaction_Value', 'Min_Transaction_Value'])
-
-    # Realizar la predicción
-    pred = modelo.predict(X_nuevo)
-
-    # Mostrar resultado
-    niveles = ['bajo', 'medio', 'alto']
-    st.success(f"🔍 Nivel de LTV Predicho: **{niveles[int(pred[0])]}**")
-
-    # Comparar valores ingresados vs. promedio de referencia
-    st.markdown("### 📊 Comparación con el perfil promedio")
-    promedios = {
-        'Total_Spent': 900.0,
-        'Avg_Transaction_Value': 80.0,
-        'Total_Transactions': 10,
-        'Max_Transaction_Value': 200.0,
-        'Min_Transaction_Value': 5.0
+    input_data = {
+        'Age': age,
+        'Income_Level': income_level,
+        'App_Usage_Frequency': usage_freq,
+        'Preferred_Payment_Method': preferred_method
     }
+    if show_advanced:
+        input_data.update({
+            'Total_Transactions': total_tx,
+            'Avg_Transaction_Value': avg_tx_value,
+            'Active_Days': active_days,
+            'Last_Transaction_Days_Ago': days_since_last,
+            'Issue_Resolution_Time': issue_time
+        })
+    input_df = pd.DataFrame([input_data])
+    # Cargar medianas históricas para imputation de variables faltantes
+    df_hist = pd.read_csv('data/digital_wallet_ltv_dataset.csv')
+    medians = df_hist.select_dtypes(include='number').median()
+    # Asegurar columnas y rellenar con medianas históricas
+    input_df = input_df.reindex(columns=model.feature_names_in_)
+    input_df = input_df.fillna(medians[input_df.columns])
+    prediction = model.predict(input_df)[0]
+    st.success(f"Predicción de LTV: {prediction:.2f}")
 
-    df_comp = pd.DataFrame({
-        'Variable': list(promedios.keys()),
-        'Usuario': [total_spent, avg_trans, total_trans, max_trans, min_trans],
-        'Promedio': list(promedios.values())
-    })
+    # Evaluar nivel de riesgo según cuantiles de LTV
+    q1 = df_hist['LTV'].quantile(0.33)
+    q2 = df_hist['LTV'].quantile(0.66)
+    if prediction < q1:
+        st.error("Nivel de riesgo: ALTO 🔴")
+    elif prediction < q2:
+        st.warning("Nivel de riesgo: MEDIO 🟠")
+    else:
+        st.success("Nivel de riesgo: BAJO 🟢")
 
-    df_comp.set_index('Variable').plot(kind='bar', figsize=(8, 5))
-    plt.title('Usuario vs Promedio (valores transaccionales)')
-    plt.ylabel('Valor')
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    st.pyplot(plt)
+    st.subheader("Importancia de características")
+    fig, ax = plt.subplots()
+    sns.barplot(x=importances.values, y=importances.index, ax=ax)
+    st.pyplot(fig)
 
-    # Guardar la predicción en un DataFrame para descargar
-    historial_df = X_nuevo.copy()
-    historial_df["Prediccion_LTV"] = niveles[int(pred[0])]
-
-    # Descargar la predicción como CSV
-    st.download_button(
-        label="📥 Descargar esta predicción como CSV",
-        data=historial_df.to_csv(index=False),
-        file_name="mi_prediccion.csv",
-        mime="text/csv"
-    )
-
-    st.markdown("### 🔍 Variables más influyentes del modelo")
-    try:
-        coef = modelo.coef_[0]
-        coef_df = pd.DataFrame({
-            'Variable': X_nuevo.columns,
-            'Importancia': coef
-        }).sort_values(by='Importancia', key=abs, ascending=False)
-        st.dataframe(coef_df.head(5))
-    except:
-        st.warning("Este modelo no permite mostrar importancia de variables directamente.")
-
-    # Comparación con el historial si existe
-    if os.path.exists("outputs/historial_predicciones.csv"):
-        st.markdown("### 📊 Comparación con otras predicciones")
-        historial = pd.read_csv("outputs/historial_predicciones.csv")
-        st.write("Distribución de Total Spent por nivel de LTV:")
-
-        import seaborn as sns
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        sns.boxplot(data=historial, x="Prediccion_LTV", y="Total_Spent", ax=ax)
-        st.pyplot(fig)
-
-st.markdown("### 🗑 Limpiar Historial de Predicciones")
-if st.button("Borrar historial"):
-    try:
-        os.remove("outputs/historial_predicciones.csv")
-        st.success("Historial eliminado correctamente.")
-    except FileNotFoundError:
-        st.info("No hay historial para eliminar.")
+    st.subheader("Distribución histórica de LTV")
+    fig2, ax2 = plt.subplots()
+    sns.histplot(df_hist['LTV'], bins=30, kde=True, ax=ax2)
+    st.pyplot(fig2)
